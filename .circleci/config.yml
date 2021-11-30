@@ -1,4 +1,4 @@
-version: 2
+version: 2.1
 
 general:
 # Uncomment the following to specify only a specific branch
@@ -33,32 +33,41 @@ jobs:
           command: |
             echo 'make hub key'
             mkdir keys
-            echo $HUB_SERVER_KEY_HEX | xxd -r -ps >> keys/hub.key
-            openssl rsa -in keys/hub.key -check -noout
+            echo $SFDX_JWT_KEY | xxd -r -ps >> assets/server.key
+            openssl rsa -in assets/server.key -check -noout
           ### Uncomment the following if performing deployments
           #- echo 'make deploy key'
           #- echo $DEPLOY_SERVER_KEY_HEX | xxd -r -ps >> keys/deploy.key
           #- openssl rsa -in keys/deploy.key -check -noout
-          #- sfdx force:auth:jwt:grant --clientid $DEPLOY_CONSUMER_KEY --jwtkeyfile keys/deploy.key --username $DEPLOY_SFDC_USER -a deploy
+          #- sfdx force:auth:jwt:grant --clientid $DEPLOY_CONSUMER_KEY --jwtkeyfile keys/deploy.key --username $SFDX_JWT_KEY -a deploy
       - run:
           name: Setup Org
           command: |
             echo 'Running tests'
-            sfdx force:auth:jwt:grant --clientid $HUB_CONSUMER_KEY --jwtkeyfile keys/hub.key --username $HUB_SFDC_USER --setdefaultdevhubusername -a hub
+            sfdx force:auth:jwt:grant --clientid $SFDX_CONSUMER_KEY --jwtkeyfile assets/server.key --username $USERNAME --setdefaultdevhubusername -a HubOrg
             sfdx force --help
-            sfdx force:org:create -s -f ~/ci_app/config/project-scratch-def.json -a circle_build_$CIRCLE_BUILD_NUM --wait 2
-            sfdx force:source:push -u circle_build_$CIRCLE_BUILD_NUM
+            sfdx force:org:create -v HubOrg -s -f config/project-scratch-def.json -a ciorg
+            sfdx force:org:display -u ciorg
+            sfdx force:source:push -u ciorg
+           
+          #-  sfdx force:org:create -s -f ~/ci_app/config/project-scratch-def.json -a circle_build_$CIRCLE_BUILD_NUM --wait 2
+          #- sfdx force:source:push -u circle_build_$CIRCLE_BUILD_NUM
+            
+            
       - run:
           name: Run Apex Tests
           command: |
             mkdir -p ~/junit
-            sfdx force:apex:test:run -c -d ~/junit -r junit --wait 5
+            sfdx force:apex:test:run -u ciorg -c -d ~/junit -r junit --wait 15
+      
+          #- sfdx force:apex:test:run -c -d ~/junit -r junit --wait 5
       - store_test_results:
           path: ~/junit
       - run:
           name: Delete Useless Scratch Org
           command: |
-            sfdx force:org:delete -u circle_build_$CIRCLE_BUILD_NUM -p
+            sfdx force:org:delete -u ciorg -p
+          #-  sfdx force:org:delete -u circle_build_$CIRCLE_BUILD_NUM -p
 
 ### Uncomment the following if performing deployments
 #deployment:
